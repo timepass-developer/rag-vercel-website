@@ -1,14 +1,18 @@
+# Build output
 build
-dist / media
-node_modules
-.DS_Store
-.env
+dist
 .next
 .vercel
 
-# Payload default media upload directory
-public/media/
+# Dependencies
+node_modules
 
-public/robots.txt
-public/sitemap*.xml
+# Environment variables
+.env
 .env*.local
+.env.development
+.env.production
+
+
+# OS files
+.DS_Store
