@@ -4,5 +4,19 @@
       "path": "/api/payload-jobs/run",
       "schedule": "0 0 * * *"
     }
-  ]
+  ],
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next",
+      "config": {
+        "skipAutoInstall": true
+      }
+    }
+  ],
+  "build": {
+    "env": {
+      "PAYLOAD_CONFIG_PATH": "dist/payload.config.js"
+    }
+  }
 }

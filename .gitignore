@@ -1,6 +1,5 @@
 # Build output
 build
-dist
 .next
 .vercel
 
@@ -13,6 +12,11 @@ node_modules
 .env.development
 .env.production
 
+# Payload default media upload directory
+public/media/
+
+public/robots.txt
+public/sitemap*.xml
 
 # OS files
 .DS_Store
