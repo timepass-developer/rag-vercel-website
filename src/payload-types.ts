@@ -72,6 +72,7 @@ export interface Config {
     media: Media;
     categories: Category;
     users: User;
+    'rag-apps': RagApp;
     redirects: Redirect;
     forms: Form;
     'form-submissions': FormSubmission;
@@ -88,6 +89,7 @@ export interface Config {
     media: MediaSelect<false> | MediaSelect<true>;
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
+    'rag-apps': RagAppsSelect<false> | RagAppsSelect<true>;
     redirects: RedirectsSelect<false> | RedirectsSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
     'form-submissions': FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
@@ -729,6 +731,93 @@ export interface Form {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "rag-apps".
+ */
+export interface RagApp {
+  id: number;
+  /**
+   * The name of your RAG application
+   */
+  title: string;
+  /**
+   * Briefly describe what your application does
+   */
+  description: string;
+  /**
+   * The URL-friendly name for your application
+   */
+  slug: string;
+  /**
+   * Only published apps will appear in the gallery
+   */
+  status: 'draft' | 'published';
+  /**
+   * Feature this app in the gallery
+   */
+  featured?: boolean | null;
+  /**
+   * Cover image for the application
+   */
+  image?: (number | null) | Media;
+  /**
+   * Tags to categorize this application
+   */
+  tags?:
+    | {
+        tag?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * The RAG workflow configuration (nodes and edges)
+   */
+  workflow?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  /**
+   * API keys for the application (encrypted)
+   */
+  apiKeys?: {
+    /**
+     * OpenAI API Key
+     */
+    openai?: string | null;
+    /**
+     * Mistral API Key
+     */
+    mistral?: string | null;
+    /**
+     * Anthropic API Key
+     */
+    anthropic?: string | null;
+    /**
+     * AssemblyAI API Key
+     */
+    assemblyAi?: string | null;
+  };
+  /**
+   * UI configuration for the application
+   */
+  uiSettings?: {
+    theme?: ('system' | 'light' | 'dark') | null;
+    /**
+     * Show the workflow diagram in the application
+     */
+    showWorkflow?: boolean | null;
+  };
+  author?: (number | null) | User;
+  updatedAt: string;
+  createdAt: string;
+  _status?: ('draft' | 'published') | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "redirects".
  */
 export interface Redirect {
@@ -918,6 +1007,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'users';
         value: number | User;
+      } | null)
+    | ({
+        relationTo: 'rag-apps';
+        value: number | RagApp;
       } | null)
     | ({
         relationTo: 'redirects';
@@ -1275,6 +1368,43 @@ export interface UsersSelect<T extends boolean = true> {
   hash?: T;
   loginAttempts?: T;
   lockUntil?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "rag-apps_select".
+ */
+export interface RagAppsSelect<T extends boolean = true> {
+  title?: T;
+  description?: T;
+  slug?: T;
+  status?: T;
+  featured?: T;
+  image?: T;
+  tags?:
+    | T
+    | {
+        tag?: T;
+        id?: T;
+      };
+  workflow?: T;
+  apiKeys?:
+    | T
+    | {
+        openai?: T;
+        mistral?: T;
+        anthropic?: T;
+        assemblyAi?: T;
+      };
+  uiSettings?:
+    | T
+    | {
+        theme?: T;
+        showWorkflow?: T;
+      };
+  author?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  _status?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

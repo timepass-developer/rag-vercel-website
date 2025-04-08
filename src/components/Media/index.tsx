@@ -1,25 +1,27 @@
-import React, { Fragment } from 'react'
+import React from 'react'
 
-import type { Props } from './types'
-
-import { ImageMedia } from './ImageMedia'
-import { VideoMedia } from './VideoMedia'
-
-export const Media: React.FC<Props> = (props) => {
-  const { className, htmlElement = 'div', resource } = props
-
-  const isVideo = typeof resource === 'object' && resource?.mimeType?.includes('video')
-  const Tag = htmlElement || Fragment
+export const Media: React.FC<{
+  resource: any
+  width?: number
+  height?: number
+  className?: string
+  imgClassName?: string
+  priority?: boolean
+}> = ({ resource, width, height, className, imgClassName, priority }) => {
+  if (!resource || !resource.url) {
+    return null
+  }
 
   return (
-    <Tag
-      {...(htmlElement !== null
-        ? {
-            className,
-          }
-        : {})}
-    >
-      {isVideo ? <VideoMedia {...props} /> : <ImageMedia {...props} />}
-    </Tag>
+    <div className={className}>
+      <img
+        src={resource.url}
+        alt={resource.alt || ''}
+        width={width}
+        height={height}
+        className={imgClassName}
+        loading={priority ? undefined : 'lazy'}
+      />
+    </div>
   )
 }

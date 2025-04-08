@@ -1,11 +1,21 @@
-import { HeaderClient } from './Component.client'
-import { getCachedGlobal } from '@/utilities/getGlobals'
+'use client'
+
 import React from 'react'
+import { Header as HeaderType } from '../payload-types'
+import { HeaderNav } from './Nav'
 
-import type { Header } from '@/payload-types'
+// Named export for the Header component
+export const Header: React.FC<{
+  header?: HeaderType
+}> = ({ header }) => {
+  const navItems = header?.navItems || []
 
-export async function Header() {
-  const headerData: Header = await getCachedGlobal('header', 1)()
-
-  return <HeaderClient data={headerData} />
+  return (
+    <header>
+      <HeaderNav navItems={navItems} />
+    </header>
+  )
 }
+
+// Default export as well for flexibility
+export default Header

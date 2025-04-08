@@ -1,4 +1,5 @@
 import type { StaticImageData } from 'next/image'
+import Image from 'next/image'
 
 import { cn } from '@/utilities/ui'
 import React from 'react'
@@ -42,25 +43,28 @@ export const MediaBlock: React.FC<Props> = (props) => {
         className,
       )}
     >
-      {(media || staticImage) && (
+      {media && (
         <Media
           imgClassName={cn('border border-border rounded-[0.8rem]', imgClassName)}
           resource={media}
+        />
+      )}
+      {staticImage && !media && (
+        <Image
           src={staticImage}
+          alt={typeof caption === 'string' ? caption : 'Media image'}
+          className={cn('border border-border rounded-[0.8rem] w-full h-auto', imgClassName)}
         />
       )}
       {caption && (
-        <div
+        <figcaption
           className={cn(
-            'mt-6',
-            {
-              container: !disableInnerContainer,
-            },
+            'mt-2 text-center text-sm text-gray-600 dark:text-gray-400 container mx-auto',
             captionClassName,
           )}
         >
-          <RichText data={caption} enableGutter={false} />
-        </div>
+          {typeof caption === 'string' ? caption : <RichText data={caption as any} />}
+        </figcaption>
       )}
     </div>
   )
