@@ -1,4 +1,4 @@
-import React, { memo, useState } from 'react'
+import React, { useState } from 'react'
 import { Handle, Position } from 'reactflow'
 import { RagNodeData, useRectFlow } from '@/providers/RectFlowProvider'
 import { AlertCircle, Check, ChevronDown, ChevronUp, Loader2, X } from 'lucide-react'
@@ -22,16 +22,16 @@ const NodeStatusIndicator = ({ status }: { status: string }) => {
   }
 }
 
-const RagNode = ({ id, data, selected }: RagNodeProps) => {
+const RagNode: React.FC<RagNodeProps> = ({ id, data, selected }) => {
   const { executeNode, deleteNode } = useRectFlow()
   const [expanded, setExpanded] = useState(false)
 
   const handleExecute = () => {
-    if (executeNode) executeNode(id)
+    executeNode(id)
   }
 
   const handleDelete = () => {
-    if (deleteNode) deleteNode(id)
+    deleteNode(id)
   }
 
   // Render different content based on node type
@@ -359,14 +359,14 @@ const RagNode = ({ id, data, selected }: RagNodeProps) => {
         <div className="flex justify-between p-2 bg-gray-50 border-t border-gray-200">
           <button
             className="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700"
-            onClick={() => executeNode && executeNode(id)}
+            onClick={handleExecute}
             disabled={data.status === 'processing'}
           >
             {data.status === 'processing' ? 'Running...' : 'Run'}
           </button>
           <button
             className="px-2 py-1 text-xs text-gray-600 hover:text-red-600"
-            onClick={() => deleteNode && deleteNode(id)}
+            onClick={handleDelete}
           >
             Remove
           </button>
@@ -391,5 +391,4 @@ const RagNode = ({ id, data, selected }: RagNodeProps) => {
   )
 }
 
-// Use memo to prevent unnecessary re-renders
-export default memo(RagNode)
+export default RagNode

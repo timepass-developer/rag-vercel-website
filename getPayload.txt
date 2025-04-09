@@ -1,4 +1,3 @@
-
 import payload from 'payload'
 import { Payload } from 'payload'
 import { ExtendedInitOptions } from '../types/payload'
@@ -25,11 +24,7 @@ export const getPayload = async (): Promise<Payload> => {
     // In server-side code, initialize Payload
     if (typeof window === 'undefined') {
       // If Payload is already initialized, return it
-      // Fix the any types with explicit casting
-      if (
-        (payload as Payload & { _initialized?: boolean })._initialized ||
-        (payload as Payload & { initialized?: boolean }).initialized
-      ) {
+      if ((payload as any)._initialized || (payload as any).initialized) {
         return payload
       }
 

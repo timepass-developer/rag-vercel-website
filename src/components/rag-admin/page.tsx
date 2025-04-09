@@ -29,7 +29,7 @@ export default function RagAdminPage() {
   }, [])
 
   return (
-    <div>
+    <div className="container mx-auto px-6 py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">RAG Application Dashboard</h1>
         <Link
@@ -63,12 +63,9 @@ export default function RagAdminPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
           {apps.map((app) => (
-            <div
-              key={app.id}
-              className="border rounded-lg overflow-hidden bg-white dark:bg-gray-800 shadow-sm"
-            >
+            <div key={app.id} className="bg-white rounded-lg shadow-md p-6">
               <div className="p-6">
                 <div className="flex justify-between items-start">
                   <h3 className="text-lg font-semibold">{app.title}</h3>
@@ -87,7 +84,7 @@ export default function RagAdminPage() {
                 </p>
                 <div className="mt-4 flex justify-between items-center">
                   <Link
-                    href={`/rag-admin/edit/${app.id}`}
+                    href={`/rag-admin/edit/${app.slug}`}
                     className="text-indigo-600 hover:text-indigo-800"
                   >
                     Edit

@@ -43,15 +43,26 @@ export async function POST(request: NextRequest) {
     const payload = await getPayload()
     const body = await request.json()
 
-    // Process workflow data if it's a JSON string
+    // Process workflow data
     let workflowData = body.workflow
+
+    // Fix: Properly handle workflow data regardless of format
     if (typeof workflowData === 'string') {
       try {
-        workflowData = JSON.parse(workflowData)
+        // Validate JSON string before parsing
+        if (!workflowData.trim().startsWith('{') && !workflowData.trim().startsWith('[')) {
+          workflowData = { nodes: [], edges: [] }
+        } else {
+          workflowData = JSON.parse(workflowData)
+        }
       } catch (e) {
-        console.error('Failed to parse workflow:', e)
+        console.error('Failed to parse workflow JSON:', e)
+        // Provide default empty workflow if parsing fails
         workflowData = { nodes: [], edges: [] }
       }
+    } else if (!workflowData || typeof workflowData !== 'object') {
+      // Ensure workflowData is a valid object
+      workflowData = { nodes: [], edges: [] }
     }
 
     const result = await payload.create({
@@ -76,5 +87,107 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating RAG app:', error)
     return NextResponse.json({ error: 'Failed to create RAG application' }, { status: 500 })
+  }
+}
+
+// Handle PATCH request to update a RAG app
+export async function PATCH(request: NextRequest) {
+  try {
+    const payload = await getPayload()
+    const body = await request.json()
+    const searchParams = new URL(request.url).searchParams
+
+    // Get where condition from query params - this will determine which app(s) to update
+    const whereParam = searchParams.get('where')
+    let where = {}
+
+    if (whereParam) {
+      try {
+        where = JSON.parse(whereParam)
+      } catch (e) {
+        console.error('Failed to parse where parameter:', e)
+      }
+    }
+
+    // Process workflow data if it's a string
+    let workflowData = body.workflow
+    if (typeof workflowData === 'string') {
+      try {
+        // Validate JSON string before parsing
+        if (workflowData.trim().startsWith('{') || workflowData.trim().startsWith('[')) {
+          workflowData = JSON.parse(workflowData)
+        } else {
+          workflowData = { nodes: [], edges: [] }
+        }
+      } catch (e) {
+        console.error('Failed to parse workflow JSON:', e)
+        workflowData = { nodes: [], edges: [] }
+      }
+    } else if (!workflowData || typeof workflowData !== 'object') {
+      workflowData = { nodes: [], edges: [] }
+    }
+
+    const updateData = {
+      ...body,
+      workflow: workflowData,
+    }
+
+    // Remove id from updateData if present - it shouldn't be part of the update
+    if ('id' in updateData) {
+      delete updateData.id
+    }
+
+    // Update the RAG app(s)
+    const result = await payload.update({
+      collection: 'rag-apps',
+      where,
+      data: updateData,
+    })
+
+    // Revalidate paths
+    if (body.slug) {
+      revalidatePath('/rag-gallery')
+      revalidatePath(`/rag-gallery/${body.slug}`)
+    }
+
+    return NextResponse.json(result)
+  } catch (error) {
+    console.error('Error updating RAG app:', error)
+    return NextResponse.json({ error: 'Failed to update RAG application' }, { status: 500 })
+  }
+}
+
+// Handle DELETE request to delete RAG app(s)
+export async function DELETE(request: NextRequest) {
+  try {
+    const payload = await getPayload()
+    const searchParams = new URL(request.url).searchParams
+
+    // Get where condition from query params
+    const whereParam = searchParams.get('where')
+    let where = {}
+
+    if (whereParam) {
+      try {
+        where = JSON.parse(whereParam)
+      } catch (e) {
+        console.error('Failed to parse where parameter:', e)
+      }
+    }
+
+    // Delete the RAG app(s) matching the where condition
+    const result = await payload.delete({
+      collection: 'rag-apps',
+      where,
+    })
+
+    // Revalidate paths
+    revalidatePath('/rag-gallery')
+    revalidatePath('/rag-admin')
+
+    return NextResponse.json(result)
+  } catch (error) {
+    console.error('Error deleting RAG app:', error)
+    return NextResponse.json({ error: 'Failed to delete RAG application' }, { status: 500 })
   }
 }

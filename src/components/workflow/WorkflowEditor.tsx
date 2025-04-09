@@ -1,22 +1,33 @@
-import React, { useCallback, useRef, useState } from 'react'
-import ReactFlow, { Background, Controls, Panel } from 'reactflow'
+'use client'
+
+import React, { useCallback, useRef, useState, useEffect } from 'react'
 import { useRectFlow, NodeType } from '@/providers/RectFlowProvider'
 import RagNode from './RagNode'
 import 'reactflow/dist/style.css'
 import { Plus, PlayCircle, Save, LayoutGrid, Trash, FileDown, FileUp } from 'lucide-react'
+import ReactFlow, { Background, Controls, Panel, ReactFlowProvider } from 'reactflow'
 
 // Define available node types
 const NODE_TYPES = [
   { type: 'imageUpload', label: 'Image Upload' },
   { type: 'textExtraction', label: 'Text Extraction' },
   { type: 'translation', label: 'Translation' },
+  { type: 'mistralTranslation', label: 'Mistral Translation' },
   { type: 'simplification', label: 'Simplification' },
   { type: 'memgraphStorage', label: 'Knowledge Storage' },
   { type: 'documentSearch', label: 'Document Search' },
   { type: 'questionAnswering', label: 'Question Answering' },
+  { type: 'audioUpload', label: 'Audio Upload' },
+  { type: 'videoUpload', label: 'Video Upload' },
+  { type: 'audioTranscription', label: 'Audio Transcription' },
+  { type: 'videoTranscription', label: 'Video Transcription' },
+  { type: 'documentUpload', label: 'Document Upload' },
+  { type: 'documentProcessing', label: 'Document Processing' },
+  { type: 'documentChunking', label: 'Document Chunking' },
+  { type: 'vectorization', label: 'Vectorization' },
 ]
 
-// Custom node types map
+// Define nodeTypes OUTSIDE the component
 const nodeTypes = {
   ragNode: RagNode,
 }
@@ -41,14 +52,19 @@ const WorkflowEditor: React.FC<{
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null)
   const [showNodeMenu, setShowNodeMenu] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
+
+  // Initialize component
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   // Add a node at a specific position in the canvas
   const handleAddNode = useCallback(
     (type: NodeType) => {
-      const position = reactFlowInstance
-        ? reactFlowInstance.project({ x: 100, y: 100 })
-        : { x: 100, y: 100 }
+      if (!reactFlowInstance) return
 
+      const position = reactFlowInstance.project({ x: 100, y: 100 })
       addNode(type, position)
       setShowNodeMenu(false)
     },
@@ -136,94 +152,118 @@ const WorkflowEditor: React.FC<{
     </div>
   )
 
+  // Don't render ReactFlow until everything is ready
+  if (!isMounted) {
+    return (
+      <div className="flex items-center justify-center h-full bg-gray-50">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-indigo-500"></div>
+        <span className="ml-3">Initializing workflow editor...</span>
+      </div>
+    )
+  }
+
+  // Wrap ReactFlow with its provider to ensure proper context initialization
   return (
     <div className="h-full w-full relative" ref={reactFlowWrapper}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        nodeTypes={nodeTypes}
-        fitView
-        onInit={setReactFlowInstance}
-        minZoom={0.2}
-        maxZoom={2}
-        proOptions={{ hideAttribution: true }}
-        className="bg-gray-50"
-      >
-        <Background color="#aaa" gap={16} size={1} />
-        <Controls />
+      <ReactFlowProvider>
+        {nodes && edges ? (
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            nodeTypes={nodeTypes}
+            fitView
+            onInit={setReactFlowInstance}
+            minZoom={0.2}
+            maxZoom={2}
+            proOptions={{ hideAttribution: true }}
+            className="bg-gray-50"
+          >
+            <Background color="#aaa" gap={16} size={1} />
+            <Controls />
 
-        <Panel position="top-left">
-          <div className="flex items-center space-x-2">
-            <button
-              className="flex items-center space-x-1 px-3 py-2 bg-white text-sm text-gray-700 border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
-              onClick={() => setShowNodeMenu(!showNodeMenu)}
-            >
-              <Plus size={16} />
-              <span>Add Node</span>
-            </button>
+            <Panel position="top-left">
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setShowNodeMenu(!showNodeMenu)}
+                  className="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 flex items-center text-sm"
+                >
+                  <Plus size={16} className="mr-1" /> Add Node
+                </button>
 
-            <button
-              className={`flex items-center space-x-1 px-3 py-2 bg-indigo-600 text-sm text-white rounded-md shadow-sm ${
-                isExecuting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-700'
-              }`}
-              onClick={executeWorkflow}
-              disabled={isExecuting}
-            >
-              <PlayCircle size={16} />
-              <span>{isExecuting ? 'Running...' : 'Run Workflow'}</span>
-            </button>
+                <button
+                  onClick={executeWorkflow}
+                  disabled={isExecuting}
+                  className={`px-3 py-2 border rounded-md flex items-center text-sm ${
+                    isExecuting
+                      ? 'bg-indigo-100 text-indigo-400 border-indigo-200 cursor-not-allowed'
+                      : 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700'
+                  }`}
+                >
+                  <PlayCircle size={16} className="mr-1" /> Run
+                </button>
 
-            {onSave && (
-              <button
-                className="flex items-center space-x-1 px-3 py-2 bg-green-600 text-sm text-white rounded-md shadow-sm hover:bg-green-700"
-                onClick={handleSaveToDatabase}
-              >
-                <Save size={16} />
-                <span>Save</span>
-              </button>
-            )}
+                <button
+                  onClick={layoutNodes}
+                  className="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 flex items-center text-sm"
+                >
+                  <LayoutGrid size={16} className="mr-1" /> Auto Layout
+                </button>
+              </div>
+              {showNodeMenu && <NodeMenu />}
+            </Panel>
 
-            <button
-              className="flex items-center space-x-1 px-3 py-2 bg-white text-sm text-gray-700 border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
-              onClick={layoutNodes}
-            >
-              <LayoutGrid size={16} />
-              <span>Auto Layout</span>
-            </button>
+            <Panel position="top-right">
+              <div className="flex space-x-2">
+                <button
+                  onClick={clearWorkflow}
+                  className="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 flex items-center text-sm"
+                >
+                  <Trash size={16} className="mr-1" /> Clear
+                </button>
+
+                <input
+                  type="file"
+                  id="load-workflow"
+                  onChange={handleLoadWorkflow}
+                  accept=".json"
+                  className="hidden"
+                />
+
+                <label
+                  htmlFor="load-workflow"
+                  className="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 flex items-center text-sm cursor-pointer"
+                >
+                  <FileUp size={16} className="mr-1" /> Load
+                </label>
+
+                <button
+                  onClick={handleSaveWorkflow}
+                  className="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 flex items-center text-sm"
+                >
+                  <FileDown size={16} className="mr-1" /> Export
+                </button>
+
+                {onSave && (
+                  <button
+                    onClick={handleSaveToDatabase}
+                    className="px-3 py-2 bg-indigo-600 text-white border border-indigo-700 rounded-md hover:bg-indigo-700 flex items-center text-sm"
+                  >
+                    <Save size={16} className="mr-1" /> Save
+                  </button>
+                )}
+              </div>
+            </Panel>
+          </ReactFlow>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <div className="animate-spin h-8 w-8 border-t-2 border-b-2 border-indigo-500 rounded-full mr-2"></div>
+            <span>Loading workflow data...</span>
           </div>
-
-          {showNodeMenu && <NodeMenu />}
-        </Panel>
-
-        <Panel position="top-right">
-          <div className="flex items-center space-x-2">
-            <label className="flex items-center space-x-1 px-3 py-2 bg-white text-sm text-gray-700 border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 cursor-pointer">
-              <FileUp size={16} />
-              <span>Load</span>
-              <input type="file" accept=".json" onChange={handleLoadWorkflow} className="hidden" />
-            </label>
-
-            <button
-              className="flex items-center space-x-1 px-3 py-2 bg-white text-sm text-gray-700 border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
-              onClick={handleSaveWorkflow}
-            >
-              <FileDown size={16} />
-              <span>Save</span>
-            </button>
-
-            <button
-              className="flex items-center space-x-1 px-3 py-2 bg-white text-sm text-red-600 border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
-              onClick={clearWorkflow}
-            >
-              <Trash size={16} />
-              <span>Clear</span>
-            </button>
-          </div>
-        </Panel>
-      </ReactFlow>
+        )}
+      </ReactFlowProvider>
     </div>
   )
 }

@@ -34,66 +34,99 @@ export const MemgraphProvider: React.FC<MemgraphProviderProps> = ({
   const [db, setDb] = useState<Driver | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [connectionAttempted, setConnectionAttempted] = useState(false)
 
   useEffect(() => {
+    let memgraphDriver: Driver | null = null;
+    
     const connectToMemgraph = async () => {
+      if (connectionAttempted) return;
+      
       try {
+        // Only attempt connection in non-dev environments or if explicitly enabled
+        if (process.env.NODE_ENV === 'development' && !process.env.NEXT_PUBLIC_ENABLE_MEMGRAPH) {
+          console.log('Skipping Memgraph connection in development mode');
+          // Provide mock implementation for development
+          setIsConnected(false);
+          setError('Memgraph connection disabled in development mode');
+          setConnectionAttempted(true);
+          return;
+        }
+
         // Connect to Memgraph (compatible with Neo4j driver)
-        const memgraphDriver = driver(
+        memgraphDriver = driver(
           serverUrl,
           username && password ? auth.basic(username, password) : undefined,
-        )
+        );
 
-        // Verify connection
-        const session = memgraphDriver.session()
-        await session.run('RETURN 1 AS result')
-        session.close()
+        // Test connection with a timeout
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Connection timed out')), 3000);
+        });
 
-        setDb(memgraphDriver)
-        setIsConnected(true)
-        setError(null)
-        console.log('Successfully connected to Memgraph')
+        const connectionPromise = async () => {
+          const session = memgraphDriver!.session();
+          try {
+            await session.run('RETURN 1 AS result');
+            return true;
+          } finally {
+            session.close();
+          }
+        };
+
+        await Promise.race([connectionPromise(), timeoutPromise]);
+        
+        setDb(memgraphDriver);
+        setIsConnected(true);
+        setError(null);
+        console.log('Successfully connected to Memgraph');
       } catch (err) {
-        setError(
-          `Failed to connect to Memgraph: ${err instanceof Error ? err.message : String(err)}`,
-        )
-        setIsConnected(false)
-        console.error('Memgraph connection error:', err)
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        setError(`Failed to connect to Memgraph: ${errorMessage}`);
+        setIsConnected(false);
+        console.error('Memgraph connection error:', err);
+        
+        // Mock implementation when connection fails
+        setDb(null);
+      } finally {
+        setConnectionAttempted(true);
       }
-    }
+    };
 
-    connectToMemgraph()
+    connectToMemgraph();
 
     return () => {
-      if (db) {
-        db.close()
+      if (memgraphDriver) {
+        memgraphDriver.close();
       }
-    }
-  }, [serverUrl, username, password])
+    };
+  }, [serverUrl, username, password, connectionAttempted]);
 
   const runQuery = async (query: string, params: Record<string, any> = {}) => {
     if (!db) {
-      throw new Error('Database is not connected')
+      console.log("Using mock Memgraph implementation because database is not connected");
+      // Return mock data for development or when connection fails
+      return [];
     }
 
-    const session = db.session()
+    const session = db.session();
     try {
-      const result = await session.run(query, params)
+      const result = await session.run(query, params);
       return result.records.map((record) => {
-        const obj: Record<string, any> = {}
+        const obj: Record<string, any> = {};
         record.keys.forEach((key) => {
-          obj[String(key)] = record.get(key)
-        })
-        return obj
-      })
+          obj[String(key)] = record.get(key);
+        });
+        return obj;
+      });
     } finally {
-      session.close()
+      session.close();
     }
-  }
+  };
 
   return (
     <MemgraphContext.Provider value={{ db, isConnected, error, runQuery }}>
       {children}
     </MemgraphContext.Provider>
-  )
-}
+  );
+};

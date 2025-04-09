@@ -11,7 +11,6 @@ import {
   MarkerType,
   NodeChange,
   EdgeChange,
-  // Remove the unused ReactFlow import
 } from 'reactflow'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -66,10 +65,6 @@ interface RectFlowContextType {
   executeWorkflow: () => Promise<void>
   isExecuting: boolean
   layoutNodes: () => void
-
-  // Add direct state setters
-  setStateNodes: (nodes: RagNode[]) => void
-  setStateEdges: (edges: Edge[]) => void
 }
 
 const RectFlowContext = createContext<RectFlowContextType>({
@@ -87,36 +82,15 @@ const RectFlowContext = createContext<RectFlowContextType>({
   executeWorkflow: async () => {},
   isExecuting: false,
   layoutNodes: () => {},
-  setStateNodes: () => {},
-  setStateEdges: () => {},
 })
 
 export const useRectFlow = () => useContext(RectFlowContext)
 
 // Wrapped provider component
 const InnerRectFlowProvider = ({ children }: { children: React.ReactNode }) => {
-  const [nodes, setNodes, onNodesChange] = useNodesState<RagNodeData>([]) as [
-    RagNode[],
-    React.Dispatch<React.SetStateAction<RagNode[]>>,
-    (changes: NodeChange[]) => void,
-  ]
+  const [nodes, setNodes, onNodesChange] = useNodesState<RagNodeData>([]) as [RagNode[], React.Dispatch<React.SetStateAction<RagNode[]>>, (changes: NodeChange[]) => void]
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const [isExecuting, setIsExecuting] = useState(false)
-
-  // Add direct state setters
-  const setStateNodes = useCallback(
-    (newNodes: RagNode[]) => {
-      setNodes(newNodes)
-    },
-    [setNodes],
-  )
-
-  const setStateEdges = useCallback(
-    (newEdges: Edge[]) => {
-      setEdges(newEdges)
-    },
-    [setEdges],
-  )
 
   // Add a new node to the workflow
   const addNode = useCallback(
@@ -355,10 +329,6 @@ const InnerRectFlowProvider = ({ children }: { children: React.ReactNode }) => {
     executeWorkflow,
     isExecuting,
     layoutNodes,
-
-    // Add direct state setters to context
-    setStateNodes,
-    setStateEdges,
   }
 
   return <RectFlowContext.Provider value={value}>{children}</RectFlowContext.Provider>
@@ -366,14 +336,160 @@ const InnerRectFlowProvider = ({ children }: { children: React.ReactNode }) => {
 
 // Helper function to get default node data based on type
 function getDefaultNodeData(type: NodeType): RagNodeData {
-  // ...existing code for getDefaultNodeData...
-  return {
-    label: type.charAt(0).toUpperCase() + type.slice(1),
-    type,
-    description: `${type} node`,
-    inputs: {},
-    outputs: {},
-    status: 'idle',
+  switch (type) {
+    case 'imageUpload':
+      return {
+        label: 'Image Upload',
+        type,
+        description: 'Upload an image to extract text from',
+        inputs: {},
+        outputs: { file: null },
+        status: 'idle',
+      }
+    case 'textExtraction':
+      return {
+        label: 'Text Extraction',
+        type,
+        description: 'Extract text from uploaded image',
+        inputs: { file: null },
+        outputs: { text: '', language: '' },
+        status: 'idle',
+      }
+    case 'translation':
+      return {
+        label: 'Translation',
+        type,
+        description: 'Translate text to another language (uses default model)',
+        inputs: { text: '', sourceLanguage: '' },
+        outputs: { translatedText: '', targetLanguage: 'English' },
+        status: 'idle',
+      }
+    case 'mistralTranslation':
+      return {
+        label: 'Mistral Translation',
+        type,
+        description: 'High-quality translation specialized for maintaining tone and style',
+        inputs: { text: '', sourceLanguage: 'auto', targetLanguage: 'English' },
+        outputs: { translatedText: '' },
+        status: 'idle',
+      }
+    case 'simplification':
+      return {
+        label: 'Simplification',
+        type,
+        description: 'Explain text in simpler terms',
+        inputs: { text: '' },
+        outputs: { simplifiedText: '' },
+        status: 'idle',
+      }
+    case 'memgraphStorage':
+      return {
+        label: 'Knowledge Storage',
+        type,
+        description: 'Save information to Memgraph',
+        inputs: { text: '', metadata: {} },
+        outputs: { documentId: '' },
+        status: 'idle',
+      }
+    case 'questionAnswering':
+      return {
+        label: 'Question Answering',
+        type,
+        description: 'Answer questions using stored knowledge',
+        inputs: { question: '', context: [] },
+        outputs: { answer: '' },
+        status: 'idle',
+      }
+    case 'documentSearch':
+      return {
+        label: 'Document Search',
+        type,
+        description: 'Search for documents in the knowledge base',
+        inputs: { query: '' },
+        outputs: { documents: [] },
+        status: 'idle',
+      }
+    case 'audioUpload':
+      return {
+        label: 'Audio Upload',
+        type,
+        description: 'Upload an audio file for transcription',
+        inputs: {},
+        outputs: { file: null },
+        status: 'idle',
+      }
+    case 'videoUpload':
+      return {
+        label: 'Video Upload',
+        type,
+        description: 'Upload a video file for transcription',
+        inputs: {},
+        outputs: { file: null },
+        status: 'idle',
+      }
+    case 'audioTranscription':
+      return {
+        label: 'Audio Transcription',
+        type,
+        description: 'Transcribe speech from audio using AssemblyAI',
+        inputs: { file: null, speakerDiarization: false, speakers: 2 },
+        outputs: { text: '', segments: [], speakers: [] },
+        status: 'idle',
+      }
+    case 'videoTranscription':
+      return {
+        label: 'Video Transcription',
+        type,
+        description: 'Extract speech from video and transcribe using AssemblyAI',
+        inputs: { file: null, speakerDiarization: false, speakers: 2 },
+        outputs: { text: '', segments: [], speakers: [] },
+        status: 'idle',
+      }
+    case 'documentUpload':
+      return {
+        label: 'Document Upload',
+        type,
+        description: 'Upload a document (PDF, DOCX, TXT, etc.)',
+        inputs: {},
+        outputs: { file: null },
+        status: 'idle',
+      }
+    case 'documentProcessing':
+      return {
+        label: 'Document Processing',
+        type,
+        description: 'Extract text and metadata from documents',
+        inputs: { file: null },
+        outputs: { text: '', metadata: {} },
+        status: 'idle',
+      }
+    case 'documentChunking':
+      return {
+        label: 'Document Chunking',
+        type,
+        description: 'Split document into manageable chunks',
+        inputs: { text: '', chunkSize: 1000, chunkOverlap: 200 },
+        outputs: { chunks: [] },
+        status: 'idle',
+      }
+    case 'vectorization':
+      return {
+        label: 'Text Vectorization',
+        type,
+        description: 'Generate embeddings for text chunks',
+        inputs: { chunks: [] },
+        outputs: { vectorizedChunks: [] },
+        status: 'idle',
+      }
+    default:
+      return {
+        label: 'Unknown Node',
+        type: type as NodeType,
+        description: 'Unknown node type',
+        inputs: {},
+        outputs: {},
+        status: 'idle',
+      }
   }
 }
 

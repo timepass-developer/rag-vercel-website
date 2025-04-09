@@ -15,45 +15,68 @@ import ReactFlow, {
   NodeProps,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
+import { AlertTriangle, Loader } from 'lucide-react'
 
-// Dynamically load heavy component with no SSR to avoid hydration issues
+// Dynamically load heavy components with no SSR to avoid hydration issues
 const DynamicFileUploader = dynamic(() => import('./components/FileUploader'), { ssr: false })
 
 // Node components for different functionalities
-import DocumentProcessingNode from './nodes/DocumentProcessingNode'
-import ImageProcessingNode from './nodes/ImageProcessingNode'
-import LlmQueryNode from './nodes/LlmQueryNode'
-import OutputDisplayNode from './nodes/OutputDisplayNode'
-import TranslationNode from './nodes/TranslationNode'
-import TranscriptionNode from './nodes/TranscriptionNode'
-import VectorStoreNode from './nodes/VectorStoreNode'
-import StartNode from './nodes/StartNode'
+const DocumentProcessingNode = dynamic(() => import('./nodes/DocumentProcessingNode'), {
+  ssr: false,
+})
+const ImageProcessingNode = dynamic(() => import('./nodes/ImageProcessingNode'), { ssr: false })
+const LlmQueryNode = dynamic(() => import('./nodes/LlmQueryNode'), { ssr: false })
+const OutputDisplayNode = dynamic(() => import('./nodes/OutputDisplayNode'), { ssr: false })
+const TranslationNode = dynamic(() => import('./nodes/TranslationNode'), { ssr: false })
+const TranscriptionNode = dynamic(() => import('./nodes/TranscriptionNode'), { ssr: false })
+const VectorStoreNode = dynamic(() => import('./nodes/VectorStoreNode'), { ssr: false })
+const StartNode = dynamic(() => import('./nodes/StartNode'), { ssr: false })
+const RagNode = dynamic(() => import('@/components/workflow/RagNode').then((mod) => mod.default), {
+  ssr: false,
+})
 
 // Define node types mapping
 const nodeTypes = {
-  start: StartNode,
-  documentProcessing: DocumentProcessingNode,
-  imageProcessing: ImageProcessingNode,
-  llmQuery: LlmQueryNode,
-  outputDisplay: OutputDisplayNode,
-  translation: TranslationNode,
-  transcription: TranscriptionNode,
-  vectorStore: VectorStoreNode,
-  ragNode: dynamic(() => import('@/components/workflow/RagNode').then(mod => mod.default), { ssr: false }) as unknown as React.ComponentType<NodeProps>,
+  start: StartNode as unknown as React.ComponentType<NodeProps>,
+  documentProcessing: DocumentProcessingNode as unknown as React.ComponentType<NodeProps>,
+  imageProcessing: ImageProcessingNode as unknown as React.ComponentType<NodeProps>,
+  llmQuery: LlmQueryNode as unknown as React.ComponentType<NodeProps>,
+  outputDisplay: OutputDisplayNode as unknown as React.ComponentType<NodeProps>,
+  translation: TranslationNode as unknown as React.ComponentType<NodeProps>,
+  transcription: TranscriptionNode as unknown as React.ComponentType<NodeProps>,
+  vectorStore: VectorStoreNode as unknown as React.ComponentType<NodeProps>,
+  ragNode: RagNode as unknown as React.ComponentType<NodeProps>,
 }
 
 // Interface for the application props
 interface RagAppRendererProps {
-  workflow: {
-    nodes: Node[]
-    edges: Edge[]
+  workflow:
+    | {
+        nodes: Node[]
+        edges: Edge[]
+      }
+    | string
+  config: {
+    features: {
+      documentProcessing: boolean
+      imageProcessing: boolean
+      audioTranscription: boolean
+      videoProcessing?: boolean
+    }
   }
-  config: any
-  apiKeys: any
-  uiSettings: any
+  apiKeys: Record<string, string>
+  uiSettings: {
+    theme: 'light' | 'dark' | 'system'
+    showWorkflow: boolean
+  }
 }
 
-export function RagAppRenderer({ workflow, config, apiKeys, uiSettings }: RagAppRendererProps) {
+export const RagAppRenderer: React.FC<RagAppRendererProps> = ({
+  workflow,
+  config,
+  apiKeys,
+  uiSettings,
+}) => {
   // Parse the workflow if it's stored as a string
   const parsedWorkflow = useMemo(() => {
     if (typeof workflow === 'string') {
@@ -72,11 +95,22 @@ export function RagAppRenderer({ workflow, config, apiKeys, uiSettings }: RagApp
   const initialEdges = useMemo(() => parsedWorkflow?.edges || [], [parsedWorkflow])
 
   // State for nodes, edges, and workflow execution
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
+  const [nodes, _setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [nodeData, setNodeData] = useState<Record<string, any>>({})
   const [isExecuting, setIsExecuting] = useState(false)
   const [executionResults, setExecutionResults] = useState<Record<string, any>>({})
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState('input')
+
+  // Query input state management
+  const [queryInput, setQueryInput] = useState('')
+  const [files, setFiles] = useState<Record<string, File[]>>({
+    documents: [],
+    images: [],
+    audio: [],
+    video: [],
+  })
 
   // Set up the theme based on UI settings
   const [theme, setTheme] = useState(uiSettings?.theme || 'system')
@@ -114,12 +148,39 @@ export function RagAppRenderer({ workflow, config, apiKeys, uiSettings }: RagApp
     }))
   }
 
+  // Handle file selection based on file type
+  const handleFileSelected = (
+    fileType: 'documents' | 'images' | 'audio' | 'video',
+    selectedFiles: File[],
+  ) => {
+    setFiles((prev) => ({
+      ...prev,
+      [fileType]: selectedFiles,
+    }))
+
+    // Update the corresponding node data
+    const nodeTypeMap = {
+      documents: 'documentProcessing',
+      images: 'imageProcessing',
+      audio: 'transcription',
+      video: 'videoProcessing', // If you implement a video processing node
+    }
+
+    const nodeType = nodeTypeMap[fileType]
+    const targetNode = nodes.find((n) => n.data.nodeType === nodeType)
+
+    if (targetNode) {
+      updateNodeData(targetNode.id, { files: selectedFiles })
+    }
+  }
+
   // Execute a specific node
   const executeNode = async (nodeId: string) => {
     const node = nodes.find((n) => n.id === nodeId)
     if (!node) return
 
     setIsExecuting(true)
+    setErrorMessage(null)
 
     try {
       // Get incoming nodes to determine input data
@@ -142,7 +203,11 @@ export function RagAppRenderer({ workflow, config, apiKeys, uiSettings }: RagApp
           result = await executeImageProcessing(nodeData[nodeId], inputData)
           break
         case 'llmQuery':
-          result = await executeLlmQuery(nodeData[nodeId], inputData, apiKeys)
+          result = await executeLlmQuery(
+            nodeData[nodeId] || { query: queryInput },
+            inputData,
+            apiKeys,
+          )
           break
         case 'translation':
           result = await executeTranslation(nodeData[nodeId], inputData, apiKeys)
@@ -179,12 +244,19 @@ export function RagAppRenderer({ workflow, config, apiKeys, uiSettings }: RagApp
         }
       }
 
+      // After execution completes, switch to results tab for better UX
+      if (!uiSettings?.showWorkflow) {
+        setActiveTab('results')
+      }
+
       return result
     } catch (error) {
       console.error(`Error executing node ${nodeId}:`, error)
+      const errorMsg = error instanceof Error ? error.message : 'An error occurred'
+      setErrorMessage(errorMsg)
       setExecutionResults((prev) => ({
         ...prev,
-        [nodeId]: { error: error instanceof Error ? error.message : 'An error occurred' },
+        [nodeId]: { error: errorMsg },
       }))
     } finally {
       setIsExecuting(false)
@@ -196,36 +268,68 @@ export function RagAppRenderer({ workflow, config, apiKeys, uiSettings }: RagApp
     const startNode = nodes.find((node) => node.data.nodeType === 'start')
     if (startNode) {
       await executeNode(startNode.id)
+    } else {
+      // If there's no start node, find nodes with no incoming edges
+      const nodesWithNoInputs = nodes.filter(
+        (node) => !edges.some((edge) => edge.target === node.id),
+      )
+
+      // Execute these nodes in sequence
+      for (const node of nodesWithNoInputs) {
+        await executeNode(node.id)
+      }
     }
   }
 
-  // These functions would be implemented to handle actual node functionality
+  // Placeholder implementations for node execution - would be replaced by actual implementations
   const executeDocumentProcessing = async (nodeConfig: any, inputData: any) => {
+    // Simulate processing delay
+    await new Promise((resolve) => setTimeout(resolve, 1000))
     // Implementation would go here
     return { text: 'Processed document content...', chunks: ['Chunk 1', 'Chunk 2'] }
   }
 
   const executeImageProcessing = async (nodeConfig: any, inputData: any) => {
+    await new Promise((resolve) => setTimeout(resolve, 1000))
     // Implementation would go here
     return { caption: 'Image caption...', tags: ['tag1', 'tag2'] }
   }
 
   const executeLlmQuery = async (nodeConfig: any, inputData: any, apiKeys: any) => {
-    // Implementation would go here
-    return { response: 'LLM response to query...' }
+    // Simulate LLM processing time
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+
+    const query = nodeConfig?.query || 'Default query'
+
+    try {
+      // In a production implementation, this would use actual API calls
+      // For now just return a mock response
+      return {
+        response: `This is a simulated response to your query: "${query}". In a real implementation, this would call an LLM API using the provided API keys and context from previous nodes.`,
+        sourceDocuments: inputData?.documentProcessing?.chunks || [],
+      }
+    } catch (error) {
+      console.error('LLM query error:', error)
+      throw new Error(
+        `Failed to process LLM query: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      )
+    }
   }
 
   const executeTranslation = async (nodeConfig: any, inputData: any, apiKeys: any) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500))
     // Implementation would go here
     return { translatedText: 'Translated content...' }
   }
 
   const executeTranscription = async (nodeConfig: any, inputData: any, apiKeys: any) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500))
     // Implementation would go here
     return { transcript: 'Audio transcript...' }
   }
 
   const executeVectorStore = async (nodeConfig: any, inputData: any) => {
+    await new Promise((resolve) => setTimeout(resolve, 1000))
     // Implementation would go here
     return { vectorIds: ['id1', 'id2'], status: 'stored' }
   }
@@ -235,8 +339,16 @@ export function RagAppRenderer({ workflow, config, apiKeys, uiSettings }: RagApp
 
   return (
     <div className="rag-app-renderer">
+      {/* Show error message if any */}
+      {errorMessage && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded flex items-center text-red-600">
+          <AlertTriangle size={18} className="mr-2" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
       {showWorkflowView ? (
-        <div style={{ height: 500 }}>
+        <div className="h-[500px] bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
           <ReactFlow
             nodes={nodes.map((node) => ({
               ...node,
@@ -260,140 +372,248 @@ export function RagAppRenderer({ workflow, config, apiKeys, uiSettings }: RagApp
             <MiniMap />
             <Background gap={12} size={1} />
           </ReactFlow>
+
+          <div className="absolute top-4 right-4 z-10">
+            <button
+              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+              onClick={executeWorkflow}
+              disabled={isExecuting}
+            >
+              {isExecuting ? (
+                <>
+                  <Loader size={16} className="inline animate-spin mr-2" />
+                  Running...
+                </>
+              ) : (
+                'Run Workflow'
+              )}
+            </button>
+          </div>
         </div>
       ) : (
         // Standard UI view for end users
         <div className="standard-view">
           {/* App content based on the nodes and their configuration */}
           <div className="flex flex-col gap-6">
-            {/* Input section */}
-            <section className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
-              <h2 className="text-lg font-semibold mb-4">Input</h2>
+            {/* Tabs navigation for input/results */}
+            <div className="flex border-b mb-4">
+              <button
+                className={`px-4 py-2 ${activeTab === 'input' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'}`}
+                onClick={() => setActiveTab('input')}
+              >
+                Input
+              </button>
+              <button
+                className={`px-4 py-2 ${activeTab === 'results' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-gray-500'}`}
+                onClick={() => setActiveTab('results')}
+              >
+                Results
+              </button>
+            </div>
 
-              {config?.features?.documentProcessing && (
-                <div className="mb-4">
-                  <h3 className="text-sm font-medium mb-2">Upload Documents</h3>
-                  <DynamicFileUploader
-                    onFileSelected={(files) => {
-                      // Find document processing node and update its data
-                      const docNode = nodes.find((n) => n.data.nodeType === 'documentProcessing')
-                      if (docNode) {
-                        updateNodeData(docNode.id, { files })
-                      }
-                    }}
-                    acceptedFileTypes={'.pdf,.docx,.txt'}
-                  />
-                </div>
-              )}
+            {activeTab === 'input' && (
+              <section className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
+                <h2 className="text-lg font-semibold mb-4">Input</h2>
 
-              {config?.features?.imageProcessing && (
-                <div className="mb-4">
-                  <h3 className="text-sm font-medium mb-2">Upload Images</h3>
-                  <DynamicFileUploader
-                    onFileSelected={(files) => {
-                      const imgNode = nodes.find((n) => n.data.nodeType === 'imageProcessing')
-                      if (imgNode) {
-                        updateNodeData(imgNode.id, { files })
-                      }
-                    }}
-                    acceptedFileTypes={'.jpg,.jpeg,.png'}
-                  />
-                </div>
-              )}
+                {config?.features?.documentProcessing && (
+                  <div className="mb-4">
+                    <h3 className="text-sm font-medium mb-2">Upload Documents</h3>
+                    <DynamicFileUploader
+                      onFileSelected={(files) => handleFileSelected('documents', files)}
+                      acceptedFileTypes={'.pdf,.docx,.txt'}
+                    />
+                    {files?.documents && files.documents.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-sm font-medium">
+                          {files.documents.length} document(s) selected
+                        </p>
+                        <ul className="text-xs text-gray-500 mt-1">
+                          {files.documents.map((file, idx) => (
+                            <li key={idx} className="truncate">
+                              {file.name}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
 
-              {config?.features?.audioTranscription && (
-                <div className="mb-4">
-                  <h3 className="text-sm font-medium mb-2">Upload Audio</h3>
-                  <DynamicFileUploader
-                    onFileSelected={(files) => {
-                      const audioNode = nodes.find((n) => n.data.nodeType === 'transcription')
-                      if (audioNode) {
-                        updateNodeData(audioNode.id, { files })
-                      }
-                    }}
-                    acceptedFileTypes={'.mp3,.wav,.m4a'}
-                  />
-                </div>
-              )}
-
-              {/* Query input field */}
-              <div className="mb-4">
-                <h3 className="text-sm font-medium mb-2">Ask a question</h3>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    className="flex-1 px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="Enter your query..."
-                    onChange={(e) => {
-                      const llmNode = nodes.find((n) => n.data.nodeType === 'llmQuery')
-                      if (llmNode) {
-                        updateNodeData(llmNode.id, { query: e.target.value })
-                      }
-                    }}
-                  />
-                  <button
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                    onClick={executeWorkflow}
-                    disabled={isExecuting}
-                  >
-                    {isExecuting ? 'Processing...' : 'Submit'}
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            {/* Output section */}
-            <section className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
-              <h2 className="text-lg font-semibold mb-4">Results</h2>
-
-              {/* Find the output display node and show its results */}
-              {nodes.map((node) => {
-                if (node.data.nodeType === 'outputDisplay') {
-                  const result = executionResults[node.id]
-
-                  if (!result) {
-                    return (
-                      <div key={node.id} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
-                        <p className="text-gray-500 dark:text-gray-400">
-                          No results yet. Submit a query to see results.
+                {config?.features?.imageProcessing && (
+                  <div className="mb-4">
+                    <h3 className="text-sm font-medium mb-2">Upload Images</h3>
+                    <DynamicFileUploader
+                      onFileSelected={(files) => handleFileSelected('images', files)}
+                      acceptedFileTypes={'.jpg,.jpeg,.png'}
+                    />
+                    {files.images && files.images.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-sm font-medium">
+                          {files.images.length} image(s) selected
                         </p>
                       </div>
-                    )
-                  }
+                    )}
+                  </div>
+                )}
 
-                  if (result.error) {
-                    return (
-                      <div key={node.id} className="p-4 bg-red-50 text-red-700 rounded-md">
-                        <p>Error: {result.error}</p>
+                {config?.features?.audioTranscription && (
+                  <div className="mb-4">
+                    <h3 className="text-sm font-medium mb-2">Upload Audio</h3>
+                    <DynamicFileUploader
+                      onFileSelected={(files) => handleFileSelected('audio', files)}
+                      acceptedFileTypes={'.mp3,.wav,.m4a'}
+                    />
+                    {files.audio && files.audio.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-sm font-medium">
+                          {files.audio.length} audio file(s) selected
+                        </p>
                       </div>
-                    )
-                  }
+                    )}
+                  </div>
+                )}
 
-                  // Display the response from the LLM
-                  const llmResponse =
-                    result.response ||
-                    Object.values(result).find(
-                      (val): val is { response: string } => 
-                        val !== null && typeof val === 'object' && 'response' in val
-                    )?.response
+                {config?.features?.videoProcessing && (
+                  <div className="mb-4">
+                    <h3 className="text-sm font-medium mb-2">Upload Video</h3>
+                    <DynamicFileUploader
+                      onFileSelected={(files) => handleFileSelected('video', files)}
+                      acceptedFileTypes={'.mp4,.mov,.avi'}
+                    />
+                    {files.video && files.video.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-sm font-medium">
+                          {files.video.length} video file(s) selected
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
-                  return (
-                    <div key={node.id} className="prose dark:prose-invert max-w-none">
-                      {llmResponse ? (
-                        <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
-                          {llmResponse}
-                        </div>
+                {/* Query input field */}
+                <div className="mb-4">
+                  <h3 className="text-sm font-medium mb-2">Ask a question</h3>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      className="flex-1 px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Enter your query..."
+                      value={queryInput}
+                      onChange={(e) => {
+                        setQueryInput(e.target.value)
+                        // Update LLM node data if it exists
+                        const llmNode = nodes.find((n) => n.data.nodeType === 'llmQuery')
+                        if (llmNode) {
+                          updateNodeData(llmNode.id, { query: e.target.value })
+                        }
+                      }}
+                      disabled={isExecuting}
+                    />
+                    <button
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      onClick={executeWorkflow}
+                      disabled={
+                        isExecuting ||
+                        (!queryInput.trim() && !Object.values(files).some((arr) => arr.length > 0))
+                      }
+                    >
+                      {isExecuting ? (
+                        <>
+                          <Loader size={16} className="inline animate-spin mr-2" />
+                          Processing...
+                        </>
                       ) : (
-                        <pre className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md overflow-auto">
-                          {JSON.stringify(result, null, 2)}
-                        </pre>
+                        'Submit'
                       )}
+                    </button>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* Results section - shown by default or when activeTab is 'results' */}
+            {(activeTab === 'results' || !['input', 'results'].includes(activeTab)) && (
+              <section className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
+                <h2 className="text-lg font-semibold mb-4">Results</h2>
+
+                {isExecuting && (
+                  <div className="flex items-center justify-center p-8">
+                    <Loader size={24} className="animate-spin mr-3" />
+                    <span>Processing your request...</span>
+                  </div>
+                )}
+
+                {/* Find the output display node and show its results */}
+                {!isExecuting &&
+                  nodes.map((node) => {
+                    if (node.data.nodeType === 'outputDisplay') {
+                      const result = executionResults[node.id]
+
+                      if (!result) {
+                        return (
+                          <div key={node.id} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
+                            <p className="text-gray-500 dark:text-gray-400">
+                              No results yet. Submit a query to see results.
+                            </p>
+                          </div>
+                        )
+                      }
+
+                      if (result.error) {
+                        return (
+                          <div key={node.id} className="p-4 bg-red-50 text-red-700 rounded-md">
+                            <p>Error: {result.error}</p>
+                          </div>
+                        )
+                      }
+
+                      // Display the response from the LLM
+                      const llmResponse =
+                        result.response ||
+                        Object.values(result).find(
+                          (val): val is { response: string } =>
+                            val !== null && typeof val === 'object' && 'response' in val,
+                        )?.response
+
+                      return (
+                        <div key={node.id} className="prose dark:prose-invert max-w-none">
+                          {llmResponse ? (
+                            <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
+                              {llmResponse}
+                            </div>
+                          ) : (
+                            <pre className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md overflow-auto">
+                              {JSON.stringify(result, null, 2)}
+                            </pre>
+                          )}
+                        </div>
+                      )
+                    }
+                    return null
+                  })}
+
+                {/* If no output display nodes found, show the last execution result */}
+                {!isExecuting &&
+                  !nodes.some((node) => node.data.nodeType === 'outputDisplay') &&
+                  Object.keys(executionResults).length > 0 && (
+                    <div className="prose dark:prose-invert max-w-none">
+                      <pre className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md overflow-auto">
+                        {JSON.stringify(
+                          (() => {
+                            const keys = Object.keys(executionResults);
+                            const lastKey = keys.length > 0 ? keys[keys.length - 1] : null;
+                            return lastKey !== null 
+                              ? executionResults[lastKey as string]
+                              : null;
+                          })(),
+                          null,
+                          2,
+                        )}
+                      </pre>
                     </div>
-                  )
-                }
-                return null
-              })}
-            </section>
+                  )}
+              </section>
+            )}
           </div>
         </div>
       )}

@@ -1,17 +1,20 @@
 'use client'
+import React, { useEffect } from 'react'
+import { useHeaderTheme } from '@/providers/HeaderTheme'
 
-import React from 'react'
-import { Header as HeaderType } from '../payload-types'
-import { HeaderNav } from './Nav'
+export const HeaderClient: React.FC<{ defaultTheme?: string }> = ({ defaultTheme = 'system' }) => {
+  const { setTheme: setHeaderTheme } = useHeaderTheme()
 
-export const HeaderComponent: React.FC<{
-  header: HeaderType
-}> = ({ header }) => {
-  const navItems = header?.navItems || []
+  useEffect(() => {
+    try {
+      // Only set theme if function exists to prevent errors
+      if (typeof setHeaderTheme === 'function') {
+        setHeaderTheme(defaultTheme as any)
+      }
+    } catch (error) {
+      console.error('Error setting header theme:', error)
+    }
+  }, [defaultTheme, setHeaderTheme])
 
-  return (
-    <header>
-      <HeaderNav navItems={navItems} />
-    </header>
-  )
+  return null // This is just for theme management, no UI needed
 }

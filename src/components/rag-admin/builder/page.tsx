@@ -68,14 +68,18 @@ export default function RagAppBuilderPage({ mode = 'create' }: RagAppBuilderPage
         edges,
       }
 
+      // Fix: Ensure workflow is a valid object before converting to JSON
       const payload = {
         ...formData,
-        workflow: JSON.stringify(workflow),
+        workflow:
+          workflow && typeof workflow === 'object'
+            ? JSON.stringify(workflow)
+            : JSON.stringify({ nodes: [], edges: [] }),
       }
 
       if (app?.id) {
-        // Update existing app
-        await axios.patch(`/api/rag-apps/${app.id}`, payload)
+        // Update existing app - use the by-id endpoint with the ID value in the slug parameter
+        await axios.patch(`/api/rag-apps/by-id/${app.id}`, payload)
       } else {
         // Create new app
         const response = await axios.post('/api/rag-apps', payload)

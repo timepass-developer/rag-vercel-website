@@ -1,29 +1,25 @@
 'use client'
 
 import React, { useState, useRef } from 'react'
+import { Upload, X, File as FileIcon } from 'lucide-react'
 
 interface FileUploaderProps {
   onFileSelected: (files: File[]) => void
   acceptedFileTypes?: string
-  maxFiles?: number
-  maxSizeInMB?: number
+  multiple?: boolean
 }
 
 const FileUploader: React.FC<FileUploaderProps> = ({
   onFileSelected,
   acceptedFileTypes = '*',
-  maxFiles = 5,
-  maxSizeInMB = 10,
+  multiple = true,
 }) => {
   const [dragActive, setDragActive] = useState(false)
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const maxSizeInBytes = maxSizeInMB * 1024 * 1024
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Handle drag events
-  const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
 
@@ -34,171 +30,105 @@ const FileUploader: React.FC<FileUploaderProps> = ({
     }
   }
 
-  // Handle file validation
-  const validateFiles = (files: File[]): { valid: File[]; errors: string[] } => {
-    const validFiles: File[] = []
-    const errors: string[] = []
-    const acceptedTypes = acceptedFileTypes.split(',').map((type) => type.trim())
-
-    // Check if we're already at the max number of files
-    if (uploadedFiles.length + files.length > maxFiles) {
-      errors.push(`You can upload a maximum of ${maxFiles} files.`)
-      return { valid: validFiles, errors }
-    }
-
-    // Validate each file
-    for (const file of files) {
-      // Check file type
-      if (
-        acceptedFileTypes !== '*' &&
-        !acceptedTypes.some(
-          (type) =>
-            file.name.toLowerCase().endsWith(type.replace('*', '')) ||
-            file.type.includes(type.replace('.', '').replace('*', '')),
-        )
-      ) {
-        errors.push(`File "${file.name}" is not a supported file type.`)
-        continue
-      }
-
-      // Check file size
-      if (file.size > maxSizeInBytes) {
-        errors.push(`File "${file.name}" exceeds the maximum file size of ${maxSizeInMB}MB.`)
-        continue
-      }
-
-      validFiles.push(file)
-    }
-
-    return { valid: validFiles, errors }
-  }
-
-  // Handle dropped files
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+  // Handles drop event
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const fileArray = Array.from(e.dataTransfer.files)
-      processFiles(fileArray)
+      processFiles(e.dataTransfer.files)
     }
   }
 
-  // Handle file input change
+  // Triggered when user selects files using the file dialog
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    e.preventDefault()
-
     if (e.target.files && e.target.files.length > 0) {
-      const fileArray = Array.from(e.target.files)
-      processFiles(fileArray)
+      processFiles(e.target.files)
     }
   }
 
   // Process the selected files
-  const processFiles = (fileArray: File[]) => {
-    setError(null)
-
-    const { valid, errors } = validateFiles(fileArray)
-
-    if (errors.length > 0) {
-      setError(errors.join(' '))
-      return
-    }
-
-    if (valid.length > 0) {
-      const newFiles = [...uploadedFiles, ...valid]
-      setUploadedFiles(newFiles)
-      onFileSelected(newFiles)
-    }
+  const processFiles = (fileList: FileList) => {
+    const files = Array.from(fileList)
+    setSelectedFiles((prev) => (multiple ? [...prev, ...files] : files))
+    onFileSelected(multiple ? [...selectedFiles, ...files] : files)
   }
 
-  // Remove a file from the list
+  // Remove a file from the selection
   const removeFile = (index: number) => {
-    const newFiles = [...uploadedFiles]
-    newFiles.splice(index, 1)
-    setUploadedFiles(newFiles)
-    onFileSelected(newFiles)
+    setSelectedFiles((prev) => {
+      const newFiles = [...prev]
+      newFiles.splice(index, 1)
+      onFileSelected(newFiles)
+      return newFiles
+    })
+  }
+
+  // Get the file extension for icon display
+  const getFileExtension = (filename: string) => {
+    return filename.slice(((filename.lastIndexOf('.') - 1) >>> 0) + 2)
   }
 
   return (
-    <div className="file-uploader">
-      {/* File upload area */}
+    <div className="w-full">
       <div
-        className={`relative border-2 border-dashed rounded-lg p-6 ${
-          dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300'
+        className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+          dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-indigo-400'
         }`}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
         onDragOver={handleDrag}
         onDrop={handleDrop}
-        onClick={() => inputRef.current?.click()}
+        onClick={() => fileInputRef.current?.click()}
       >
-        <input
-          ref={inputRef}
-          onChange={handleChange}
-          type="file"
-          id="file-upload"
-          multiple
-          accept={acceptedFileTypes}
-          className="hidden"
-        />
-
-        <div className="text-center">
-          <svg
-            className="mx-auto h-12 w-12 text-gray-400"
-            stroke="currentColor"
-            fill="none"
-            viewBox="0 0 48 48"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M8 14v20c0 4.418 7.163 8 16 8 1.381 0 2.721-.087 4-.252M8 14c0 4.418 7.163 8 16 8s16-3.582 16-8M8 14c0-4.418 7.163-8 16-8s16 3.582 16 8m0 0v14m0-4c0 4.418-7.163 8-16 8S8 28.418 8 24m32 10v6m0 0v6m0-6h6m-6 0h-6"
-            />
-          </svg>
-          <p className="mt-1 text-sm text-gray-600">Click to upload or drag and drop</p>
-          <p className="mt-1 text-xs text-gray-500">
-            {acceptedFileTypes !== '*'
-              ? `Accepted file types: ${acceptedFileTypes}`
-              : 'All file types accepted'}
-          </p>
-          <p className="mt-1 text-xs text-gray-500">
-            Max {maxFiles} files, up to {maxSizeInMB}MB each
-          </p>
-        </div>
+        <Upload className="mx-auto h-10 w-10 text-gray-400" />
+        <p className="mt-2 text-sm text-gray-600">
+          Drag and drop files here or <span className="text-indigo-500 font-medium">browse</span>
+        </p>
+        <p className="mt-1 text-xs text-gray-500">
+          {acceptedFileTypes !== '*'
+            ? `Accepted formats: ${acceptedFileTypes.split(',').join(', ')}`
+            : 'All file types accepted'}
+        </p>
       </div>
 
-      {/* Error message */}
-      {error && <div className="mt-2 text-sm text-red-600">{error}</div>}
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        multiple={multiple}
+        accept={acceptedFileTypes}
+        onChange={handleChange}
+      />
 
-      {/* File list */}
-      {uploadedFiles.length > 0 && (
+      {/* Display selected files */}
+      {selectedFiles.length > 0 && (
         <div className="mt-4">
-          <h4 className="text-sm font-medium text-gray-700">Uploaded files</h4>
-          <ul className="mt-2 divide-y divide-gray-200 border rounded-md">
-            {uploadedFiles.map((file, index) => (
-              <li
-                key={`${file.name}-${index}`}
-                className="flex items-center justify-between py-2 px-4 text-sm"
-              >
+          <ul className="space-y-2">
+            {selectedFiles.map((file, index) => (
+              <li key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                 <div className="flex items-center">
-                  <span className="truncate">{file.name}</span>
-                  <span className="ml-2 text-xs text-gray-500">
-                    ({(file.size / (1024 * 1024)).toFixed(2)} MB)
-                  </span>
+                  <div className="flex-shrink-0 h-8 w-8 bg-gray-200 rounded flex items-center justify-center text-xs uppercase font-bold text-gray-500">
+                    <FileIcon size={16} />
+                  </div>
+                  <div className="ml-2">
+                    <p className="text-sm font-medium text-gray-700 truncate max-w-[200px]">
+                      {file.name}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {(file.size / 1024).toFixed(1)} KB • {getFileExtension(file.name)}
+                    </p>
+                  </div>
                 </div>
                 <button
-                  type="button"
-                  className="text-red-600 hover:text-red-800"
                   onClick={(e) => {
                     e.stopPropagation()
                     removeFile(index)
                   }}
+                  className="p-1 rounded-full hover:bg-gray-200"
                 >
-                  Remove
+                  <X size={16} className="text-gray-500" />
                 </button>
               </li>
             ))}

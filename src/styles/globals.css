@@ -45,3 +45,27 @@ body {
 .format-date {
   @apply text-xs text-gray-500;
 }
+
+/* Hide any span containing "Toggle block" text */
+span:has(span:contains("Toggle block")),
+span:contains("Toggle block") {
+  display: none !important;
+}
+
+/* Hide any spans with "Toggle block" text content */
+/* Hide toggle block spans */
+span:has(:only-child[data-content="Toggle block"]),
+span:has(span.toggle-block) {
+  visibility: hidden;
+  display: none !important;
+}
+
+/* Theme visibility settings */
+html {
+  opacity: 0;
+}
+
+html[data-theme='dark'],
+html[data-theme='light'] {
+  opacity: initial;
+}

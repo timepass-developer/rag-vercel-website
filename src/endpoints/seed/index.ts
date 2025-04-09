@@ -9,6 +9,7 @@ import { imageHero1 } from './image-hero-1'
 import { post1 } from './post-1'
 import { post2 } from './post-2'
 import { post3 } from './post-3'
+import { tutorials } from './tutorials-page'
 
 const collections: CollectionSlug[] = [
   'categories',
@@ -124,84 +125,49 @@ export const seed = async ({
       data: imageHero1,
       file: hero1Buffer,
     }),
-
-    payload.create({
-      collection: 'categories',
-      data: {
-        title: 'Technology',
-        breadcrumbs: [
-          {
-            label: 'Technology',
-            url: '/technology',
-          },
-        ],
-      },
-    }),
-
-    payload.create({
-      collection: 'categories',
-      data: {
-        title: 'News',
-        breadcrumbs: [
-          {
-            label: 'News',
-            url: '/news',
-          },
-        ],
-      },
-    }),
-
-    payload.create({
-      collection: 'categories',
-      data: {
-        title: 'Finance',
-        breadcrumbs: [
-          {
-            label: 'Finance',
-            url: '/finance',
-          },
-        ],
-      },
-    }),
-    payload.create({
-      collection: 'categories',
-      data: {
-        title: 'Design',
-        breadcrumbs: [
-          {
-            label: 'Design',
-            url: '/design',
-          },
-        ],
-      },
-    }),
-
-    payload.create({
-      collection: 'categories',
-      data: {
-        title: 'Software',
-        breadcrumbs: [
-          {
-            label: 'Software',
-            url: '/software',
-          },
-        ],
-      },
-    }),
-
-    payload.create({
-      collection: 'categories',
-      data: {
-        title: 'Engineering',
-        breadcrumbs: [
-          {
-            label: 'Engineering',
-            url: '/engineering',
-          },
-        ],
-      },
-    }),
   ])
+
+  // First, create categories without breadcrumbs
+  const categoriesData = [
+    { title: 'Technology' },
+    { title: 'News' },
+    { title: 'Finance' },
+    { title: 'Design' },
+    { title: 'Software' },
+    { title: 'Engineering' },
+  ]
+
+  payload.logger.info(`— Seeding categories...`)
+
+  // Create all categories first without relationships
+  const categories = await Promise.all(
+    categoriesData.map((category) =>
+      payload.create({
+        collection: 'categories',
+        data: {
+          title: category.title,
+        },
+      }),
+    ),
+  )
+
+  // Now update categories with breadcrumbs using their own slugs
+  await Promise.all(
+    categories.map((category) =>
+      payload.update({
+        collection: 'categories',
+        id: category.id,
+        data: {
+          breadcrumbs: [
+            {
+              label: category.title,
+              url: `/${category.title.toLowerCase()}`,
+            },
+          ],
+        },
+      }),
+    ),
+  )
 
   payload.logger.info(`— Seeding posts...`)
 
@@ -267,7 +233,7 @@ export const seed = async ({
 
   payload.logger.info(`— Seeding pages...`)
 
-  const [_, contactPage] = await Promise.all([
+  const [homePage, contactPage, tutorialsPage] = await Promise.all([
     payload.create({
       collection: 'pages',
       depth: 0,
@@ -276,7 +242,20 @@ export const seed = async ({
     payload.create({
       collection: 'pages',
       depth: 0,
-      data: contactPageData({ contactForm: contactForm }),
+      data: contactPageData({
+        contactForm: contactForm,
+        heroImage: imageHomeDoc, // Pass the hero image to the contact page
+      }),
+    }),
+    payload.create({
+      collection: 'pages',
+      depth: 0,
+      data: tutorials({
+        thumbnailImage1: image1Doc,
+        thumbnailImage2: image2Doc,
+        thumbnailImage3: image3Doc,
+        heroImage: imageHomeDoc,
+      }),
     }),
   ])
 
@@ -290,8 +269,18 @@ export const seed = async ({
           {
             link: {
               type: 'custom',
-              label: 'Posts',
-              url: '/posts',
+              label: 'RAG Gallery',
+              url: '/rag-gallery',
+            },
+          },
+          {
+            link: {
+              type: 'reference',
+              label: 'Tutorials',
+              reference: {
+                relationTo: 'pages',
+                value: tutorialsPage.id,
+              },
             },
           },
           {
@@ -314,6 +303,30 @@ export const seed = async ({
           {
             link: {
               type: 'custom',
+              label: 'Create RAG App',
+              url: '/rag-admin',
+            },
+          },
+          {
+            link: {
+              type: 'custom',
+              label: 'RAG Gallery',
+              url: '/rag-gallery',
+            },
+          },
+          {
+            link: {
+              type: 'reference',
+              label: 'Tutorials',
+              reference: {
+                relationTo: 'pages',
+                value: tutorialsPage.id,
+              },
+            },
+          },
+          {
+            link: {
+              type: 'custom',
               label: 'Admin',
               url: '/admin',
             },
@@ -321,17 +334,9 @@ export const seed = async ({
           {
             link: {
               type: 'custom',
-              label: 'Source Code',
+              label: 'RAG Documentation',
               newTab: true,
-              url: 'https://github.com/payloadcms/payload/tree/main/templates/website',
-            },
-          },
-          {
-            link: {
-              type: 'custom',
-              label: 'Payload',
-              newTab: true,
-              url: 'https://payloadcms.com/',
+              url: 'https://github.com/yourusername/rag-builder',
             },
           },
         ],
