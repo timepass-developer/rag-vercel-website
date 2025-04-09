@@ -9,11 +9,11 @@ interface AppFormData {
   featured?: boolean
   image?: string | File
   tags?: string[]
-  author?: string
+  author?: string | { id: string } | null // Updated author field type
   apiKeys?: Record<string, string>
   uiSettings?: {
-    theme?: 'light' | 'dark' | 'system'
-    showWorkflow?: boolean
+    theme: 'light' | 'dark' | 'system'
+    showWorkflow: boolean
   }
 }
 
@@ -78,13 +78,18 @@ const SaveAppModal: React.FC<SaveAppModalProps> = ({
 
   // Handle nested uiSettings changes
   const handleUiSettingChange = (setting: string, value: any) => {
-    setFormData((prev) => ({
-      ...prev,
-      uiSettings: {
-        ...(prev.uiSettings || {}),
+    setFormData((prev) => {
+      const updatedUiSettings = {
+        theme: prev.uiSettings?.theme || 'system',
+        showWorkflow: prev.uiSettings?.showWorkflow || false,
         [setting]: value,
-      },
-    }))
+      }
+
+      return {
+        ...prev,
+        uiSettings: updatedUiSettings,
+      }
+    })
   }
 
   // Handle API key changes
@@ -149,7 +154,20 @@ const SaveAppModal: React.FC<SaveAppModalProps> = ({
     e.preventDefault()
 
     if (validateForm()) {
-      onSave(formData)
+      // Fix the author format for Payload CMS
+      const formDataFixed = { ...formData }
+
+      // If author is a string, convert to null or proper format
+      if (typeof formDataFixed.author === 'string') {
+        if (formDataFixed.author.trim() === '') {
+          formDataFixed.author = null // Set to null if empty
+        } else if (!formDataFixed.author.match(/^[0-9a-fA-F]{24}$/)) {
+          // If not a valid MongoDB ObjectID format, remove author to prevent validation errors
+          delete formDataFixed.author
+        }
+      }
+
+      onSave(formDataFixed)
     }
   }
 
@@ -314,11 +332,22 @@ const SaveAppModal: React.FC<SaveAppModalProps> = ({
                     type="text"
                     id="author"
                     name="author"
-                    value={formData.author || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, author: e.target.value }))}
+                    value={
+                      formData.author
+                        ? typeof formData.author === 'object'
+                          ? formData.author.id || ''
+                          : formData.author
+                        : ''
+                    }
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, author: e.target.value || null }))
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="Enter a name"
+                    placeholder="Leave blank for no author"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Leave blank if no author is specified
+                  </p>
                 </div>
               </div>
             )}

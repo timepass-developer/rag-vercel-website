@@ -9,23 +9,67 @@ import axios from 'axios'
 import { fetchRagAppBySlug } from '@/lib/api/rag'
 import Link from 'next/link'
 import SaveAppModal from '@/components/rag-admin/SaveAppModal'
+import WorkflowInitializer from '@/components/workflow/WorkflowInitializer'
+
+// Define interfaces for app data
+interface ApiKey {
+  [key: string]: string
+}
+
+interface UiSettings {
+  theme: 'light' | 'dark' | 'system'
+  showWorkflow: boolean
+}
+
+interface AppData {
+  id?: string | number // Changed to allow both string and number types
+  title: string
+  description: string
+  slug: string
+  status: 'draft' | 'published'
+  featured?: boolean
+  author?: string | { id: string; name?: string } | null
+  tags?: string[]
+  apiKeys?: ApiKey
+  uiSettings?: UiSettings
+  workflow?: WorkflowData | string
+}
 
 // Define the interface for workflow structure
 interface WorkflowData {
-  nodes: any[]
-  edges: any[]
-  [key: string]: any // Allow for other properties
+  nodes: unknown[]
+  edges: unknown[]
+  [key: string]: unknown
+}
+
+interface SaveFormData {
+  title: string
+  description: string
+  slug: string
+  status: 'draft' | 'published'
+  featured?: boolean
+  author?: string | { id: string } | null
+  tags?: string[]
+  apiKeys?: Record<string, string>
+  uiSettings?: UiSettings
 }
 
 export default function EditRagAppPage() {
   // Use useParams hook instead of props to access route params in client components
   const params = useParams()
   const router = useRouter()
-  const [app, setApp] = useState<any>(null)
+  const [app, setApp] = useState<AppData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { nodes, edges, clearWorkflow, onNodesChange, onEdgesChange } = useRectFlow()
+  // Fix: Use actual property names and ignore them instead of using underscore prefix
+  const {
+    nodes,
+    edges,
+    clearWorkflow,
+    onNodesChange: _onNodesChange,
+    onEdgesChange: _onEdgesChange,
+  } = useRectFlow()
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   // Get slug from params (it's a string in client components)
@@ -47,7 +91,8 @@ export default function EditRagAppPage() {
           throw new Error('App not found')
         }
 
-        setApp(appData)
+        // Cast the appData to AppData type to ensure compatibility
+        setApp(appData as unknown as AppData)
 
         // Load workflow data into editor
         if (appData.workflow) {
@@ -67,28 +112,28 @@ export default function EditRagAppPage() {
 
           // First clear the workflow
           clearWorkflow()
-          
-          // DIFFERENT APPROACH: Instead of using change handlers which have compatibility issues,
-          // let's implement direct state setting from the RectFlowProvider context
-          
+
           // Add a short delay to ensure clearWorkflow has completed
           setTimeout(() => {
             try {
               // Try to directly set the nodes and edges using the provider's methods
-              // This bypasses the type incompatibility with the reset action
-              import('@/providers/RectFlowProvider').then((module) => {
-                const { setStateNodes, setStateEdges } = module.useRectFlow();
-                if (typeof setStateNodes === 'function' && Array.isArray(workflow.nodes)) {
-                  setStateNodes(workflow.nodes);
-                }
-                if (typeof setStateEdges === 'function' && Array.isArray(workflow.edges)) {
-                  setStateEdges(workflow.edges);
-                }
-              }).catch(err => console.error("Failed to import provider:", err));
+              import('@/providers/RectFlowProvider')
+                .then((module) => {
+                  const { setStateNodes, setStateEdges } = module.useRectFlow()
+                  if (typeof setStateNodes === 'function' && Array.isArray(workflow.nodes)) {
+                    // Cast to the expected type to avoid the type error
+                    setStateNodes(workflow.nodes as any)
+                  }
+                  if (typeof setStateEdges === 'function' && Array.isArray(workflow.edges)) {
+                    // Cast to the expected type to avoid the type error
+                    setStateEdges(workflow.edges as any)
+                  }
+                })
+                .catch((err) => console.error('Failed to import provider:', err))
             } catch (err) {
-              console.error("Failed to set workflow state:", err);
+              console.error('Failed to set workflow state:', err)
             }
-          }, 100);
+          }, 100)
         }
 
         setError(null)
@@ -101,10 +146,10 @@ export default function EditRagAppPage() {
     }
 
     loadApp()
-  }, [slug, clearWorkflow])  // Removed the problematic dependencies
+  }, [slug, clearWorkflow]) // Removed the problematic dependencies
 
   // Save workflow changes
-  const handleSave = async (formData: any) => {
+  const handleSave = async (formData: SaveFormData) => {
     setIsSaving(true)
     setError(null)
 
@@ -200,6 +245,7 @@ export default function EditRagAppPage() {
       )}
 
       <div className="border rounded-lg flex-grow overflow-hidden">
+        {app?.workflow && <WorkflowInitializer workflowData={app.workflow} />}
         <SafeWorkflowEditor onSave={() => setIsModalOpen(true)} />
       </div>
 
@@ -207,12 +253,15 @@ export default function EditRagAppPage() {
       <SaveAppModal
         isOpen={isModalOpen}
         initialData={{
-          title: app.title || '',
-          description: app.description || '',
-          slug: app.slug || '',
-          status: app.status || 'draft',
-          apiKeys: app.apiKeys || {},
-          uiSettings: app.uiSettings || { theme: 'system', showWorkflow: false },
+          title: app?.title || '',
+          description: app?.description || '',
+          slug: app?.slug || '',
+          status: app?.status || 'draft',
+          featured: app?.featured || false,
+          author: app?.author || null,
+          tags: app?.tags || [],
+          apiKeys: app?.apiKeys || {},
+          uiSettings: app?.uiSettings || { theme: 'system', showWorkflow: false },
         }}
         onClose={() => setIsModalOpen(false)}
         onSave={handleSave}

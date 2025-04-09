@@ -59,6 +59,40 @@ const WorkflowEditor: React.FC<{
     setIsMounted(true)
   }, [])
 
+  // Listen for workflow-load event to load workflow data
+  useEffect(() => {
+    const handleWorkflowLoad = (event: any) => {
+      if (!reactFlowInstance) return
+
+      const workflow = event.detail?.workflow
+      if (!workflow) return
+
+      if (workflow.nodes && Array.isArray(workflow.nodes)) {
+        reactFlowInstance.setNodes(workflow.nodes)
+      }
+
+      if (workflow.edges && Array.isArray(workflow.edges)) {
+        reactFlowInstance.setEdges(workflow.edges)
+      }
+
+      setTimeout(() => {
+        reactFlowInstance.fitView({ padding: 0.2 })
+      }, 100)
+    }
+
+    document.addEventListener('workflow-load', handleWorkflowLoad)
+
+    // Expose reactFlowInstance to window for WorkflowInitializer to use
+    if (reactFlowInstance) {
+      // @ts-ignore
+      window.reactFlowInstance = reactFlowInstance
+    }
+
+    return () => {
+      document.removeEventListener('workflow-load', handleWorkflowLoad)
+    }
+  }, [reactFlowInstance])
+
   // Add a node at a specific position in the canvas
   const handleAddNode = useCallback(
     (type: NodeType) => {

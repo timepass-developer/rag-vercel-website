@@ -23,44 +23,36 @@ const WorkflowInitializer: React.FC<WorkflowInitializerProps> = ({ workflowData 
   useEffect(() => {
     if (!workflowData) return
 
-    // Wait for reactFlowInstance to be available
-    const checkAndInitialize = () => {
-      if (window.reactFlowInstance) {
-        // First clear any existing workflow
-        clearWorkflow()
+    // First clear any existing workflow
+    clearWorkflow()
 
-        // Parse workflow if it's a string
-        let workflow: any
-        if (typeof workflowData === 'string') {
-          try {
-            workflow = JSON.parse(workflowData)
-          } catch (e) {
-            console.error('Failed to parse workflow JSON:', e)
-            workflow = { nodes: [], edges: [] }
-          }
-        } else {
-          workflow = workflowData
-        }
-
-        // After clearing, inject the nodes and edges directly
-        if (workflow.nodes && Array.isArray(workflow.nodes)) {
-          window.reactFlowInstance.setNodes(workflow.nodes)
-        }
-
-        if (workflow.edges && Array.isArray(workflow.edges)) {
-          window.reactFlowInstance.setEdges(workflow.edges)
-        }
-
-        setInitialized(true)
-      } else {
-        // Try again in a moment
-        setTimeout(checkAndInitialize, 100)
+    // Parse workflow if it's a string
+    let workflow: any
+    if (typeof workflowData === 'string') {
+      try {
+        workflow = JSON.parse(workflowData)
+      } catch (e) {
+        console.error('Failed to parse workflow JSON:', e)
+        workflow = { nodes: [], edges: [] }
       }
+    } else {
+      workflow = workflowData
     }
 
-    if (!initialized) {
-      checkAndInitialize()
-    }
+    // Add a delay to ensure React Flow is initialized
+    const timer = setTimeout(() => {
+      // Access the reactflow instance via global window object
+      if (typeof window !== 'undefined' && window.document) {
+        const event = new CustomEvent('workflow-load', {
+          detail: {
+            workflow,
+          },
+        })
+        window.document.dispatchEvent(event)
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
   }, [workflowData, clearWorkflow, initialized])
 
   // Nothing to render
